@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+venv/
+.venv/
+env/
+
+# PyTorch / datasets / outputs (optional common ones)
+runs/
+data/
+*.pt
+*.pth
+*.ckpt
