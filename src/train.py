@@ -89,7 +89,7 @@ def make_loaders(cfg: TrainConfig) -> tuple[DataLoader, DataLoader]:
         train_ds,
         batch_size = cfg.batch_size,
         shuffle = True,
-        num_workers = cfg.num_workers
+        num_workers = cfg.num_workers,
         pin_memory = True,
         )
     
@@ -224,7 +224,7 @@ def run_training(config_path: str | Path) -> None:
             log_every = cfg.log_every
         )
         
-        val_loss, val_acc = validate(model, val_loader, criterion, device)
+        val_loss, val_acc = Validate(model, val_loader, criterion, device)
 
         logger.info(
             f"Epoch {epoch} | "
