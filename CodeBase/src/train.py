@@ -1,132 +1,15 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from pathlib import Path
+import csv 
 import logging
-import yaml
-import csv
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
 
-#----------
-# config
-#----------
+from src.data import make_loaders
+from src.model import MLP
+from src.utils import load_config, setup_logger
 
-@dataclass(frozen = True)
-class TrainConfig:
-    epochs: int
-    batch_size: int
-    learning_rate: float
-    hidden_dim: int
-    data_dir: str = "./data" 
-    log_file: str = "training.log"
-    ckpt_path: str = "mnist_mlp_state.pt"
-    patience: int = 3
-    log_every: int = 100 
-    num_workers: int = 2
-    metrics_path: str = "metrics.csv"
-
-def load_config(config_path: str | Path) -> TrainConfig:
-    with open(config_path, "r") as f:
-        cfg = yaml.safe_load(f)
-
-    return TrainConfig(
-        epochs = int(cfg["epochs"]),
-        batch_size = int(cfg["batch_size"]),
-        learning_rate = float(cfg["learning_rate"]),
-        hidden_dim = int(cfg["hidden_dim"]),
-        data_dir = str(cfg.get("data_dir", "./data")),
-        log_file = str(cfg.get("log_file", "training.log")),
-        ckpt_path = str(cfg.get("ckpt_path", "mnist_mlp_state.pt")),
-        log_every = int(cfg.get("log_every", 100)),
-        num_workers = int(cfg.get("num_workers", 2)),
-        patience = int(cfg.get("patience", 3)),
-        metrics_path = str(cfg.get("metrics_path", "metrics.csv")),
-    )
-
-
-#----------
-# Logging
-#----------
-
-def setup_logger(name: str = "trainer", log_file: str = "training.log") -> logging.Logger:
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
-
-    # Avoid dup handlers (re-runs and imports)
-    if logger.hasHandlers():
-        logger.handlers.clear()
-
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt = "%Y-%m-%d %H:%M:%S",
-    )
-
-    console = logging.Streamhandler()
-    console.setLevel(logging.INFO)
-    console.setFormatter(formatter)
-
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-
-    logger.addHandler(console)
-    logger.addHandler(file_handler)
-    return logger
-
-#----------
-# Data
-#----------
-
-def make_loaders(cfg: TrainConfig) -> tuple[DataLoader, DataLoader]:
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,)),
-    ])
-
-    train_ds = datasets.MNIST(root = cfg.data_dir, train = True, download = True, transform = transform)
-    val_ds = datasets.MNIST(root = cfg.data_dir, train = False, download = True, transform = transform)
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_size = cfg.batch_size,
-        shuffle = True,
-        num_workers = cfg.num_workers,
-        pin_memory = True,
-        )
-    
-    val_loader = DataLoader(
-        val_ds,
-        batch_size = cfg.batch_size,
-        shuffle = False,
-        num_workers = cfg.num_workers,
-        pin_memory = True,
-        )
-    
-    return train_loader, val_loader
-
-#----------
-# Model
-#----------
-
-class MLP(nn.Module):
-    def __init__ (self, hidden_dim: int):
-        super().__init__()
-        self.fc1 = nn.Linear(28 * 28, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, 10)
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.view(x.size(0), -1) # Flatten
-        x = self.dropout(self.relu(self.fc1(x)))
-        x = self.drop(self.relu(self.fc2(x)))
-        return self.fc3(x)
     
 @torch.no_grad()
 def batch_accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
