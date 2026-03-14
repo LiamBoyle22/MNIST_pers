@@ -125,11 +125,15 @@ class MLP(nn.Module):
 @torch.no_grad()
 def batch_accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
     preds = torch.argmax(logits, dim=1)
-    return (preds == y).float().mean().item()
+    return (preds == y).float().mean().item() #Returns the average accuracy for a batch of predictions and true labels
 
 #---------
 # Train/ Validate
 #---------
+
+    #----------
+    # Validation set evaluation (no grad, no dropout)
+    #----------
 
 @torch.no_grad()
 def Validate(
@@ -153,7 +157,11 @@ def Validate(
         total_acc += batch_accuracy(logits, y)
         n_batches += 1
 
-    return total_loss / max(n_batches, 1), total_acc / max(n_batches, 1)
+    return total_loss / max(n_batches, 1), total_acc / max(n_batches, 1)    #Returns average loss and accuracy for validation set
+
+    #---------
+    # Train for one epoch (grad, dropout, logging)
+    #---------
 
 def train_one_epoch(
     model: nn.Module,
@@ -189,7 +197,7 @@ def train_one_epoch(
                 f"Step {step} | train_loss={total_loss/n_batches:.4f} | train_acc={total_acc/n_batches:.4f}"
             )
 
-    return total_loss / max(n_batches, 1), total_acc / max(n_batches, 1)
+    return total_loss / max(n_batches, 1), total_acc / max(n_batches, 1)    #Returns average loss and accuracy for singular epoch
 
 #----------
 # Orchestration
@@ -234,3 +242,8 @@ def run_training(config_path: str | Path) -> None:
 
     torch.save(model.state_dict(), cfg.ckpt_path)
     logger.info(f"Saved model -> {cfg.ckpt_path}")
+
+    model2 = MLP(cfg.hidden_dim).to(device)
+    model2.load_state_dict(torch.load(cfg.ckpt_path))
+    model2.eval()
+    logger.info(f"Loaded model <- {cfg.ckpt_path}")
