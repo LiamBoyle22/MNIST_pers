@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import logging
 import yaml
+import csv
 
 import torch
 import torch.nn as nn
@@ -24,8 +25,10 @@ class TrainConfig:
     data_dir: str = "./data" 
     log_file: str = "training.log"
     ckpt_path: str = "mnist_mlp_state.pt"
+    patience: int = 3
     log_every: int = 100 
     num_workers: int = 2
+    metrics_path: str = "metrics.csv"
 
 def load_config(config_path: str | Path) -> TrainConfig:
     with open(config_path, "r") as f:
@@ -41,7 +44,10 @@ def load_config(config_path: str | Path) -> TrainConfig:
         ckpt_path = str(cfg.get("ckpt_path", "mnist_mlp_state.pt")),
         log_every = int(cfg.get("log_every", 100)),
         num_workers = int(cfg.get("num_workers", 2)),
+        patience = int(cfg.get("patience", 3)),
+        metrics_path = str(cfg.get("metrics_path", "metrics.csv")),
     )
+
 
 #----------
 # Logging
@@ -118,7 +124,7 @@ class MLP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.view(x.size(0), -1) # Flatten
-        x = self.drop(self.relu(self.fc1(x)))
+        x = self.dropout(self.relu(self.fc1(x)))
         x = self.drop(self.relu(self.fc2(x)))
         return self.fc3(x)
     
@@ -219,7 +225,15 @@ def run_training(config_path: str | Path) -> None:
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=cfg.learning_rate)
 
+    best_val_acc = float("-inf")    #Initialize best validation accuracy to negative infinity to ensure any improvement is captured
+    epochs_wout_improve = 0     #Counter for epochs without improvement in validation accuracy
+
     logger.info("starting training...")
+
+    with open(cfg.metrics_path, "w", newline="") as metrics_file:
+        writer = csv.writer(metrics_file)
+        writer.writerow(["epoch", "train_loss", "train_acc", "val_loss", "val_acc"])
+        logger.info(f"Saved metrics -> {cfg.metrics_path}")
 
     for epoch in range (1, cfg.epochs + 1):
         tr_loss, tr_acc = train_one_epoch(
@@ -234,16 +248,45 @@ def run_training(config_path: str | Path) -> None:
         
         val_loss, val_acc = Validate(model, val_loader, criterion, device)
 
+        
         logger.info(
             f"Epoch {epoch} | "
             f"train_loss = {tr_loss:.4f} train_acc{tr_acc:.4f} | "
             f"val_loss = {val_loss:.4f} val_acc = {val_acc:.4f}"
         )
 
-    torch.save(model.state_dict(), cfg.ckpt_path)
+        writer.writerow([epoch, tr_loss, tr_acc, val_loss, val_acc])    #Log training and validation metrics to CSV for later analysis
+        metrics_file.flush()    #Ensure metrics are written to disk after each epoch
+
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            epochs_wout_improve = 0
+            logger.info(f"New best val acc: {best_val_acc:.4f}")
+        else:
+            epochs_wout_improve += 1
+            logger.info(
+                f"No improvement in val acc for {epochs_wout_improve} epoch(s)"
+                f" (patience={cfg.patience})"
+            )
+        
+        if epochs_wout_improve >= cfg.patience:
+            logger.info(f"Early stopping triggered at epoch {epoch}")
+            break   #Early stopping if validation accuracy does not improve for 'patience' epochs
+            
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "val_acc": val_acc,
+            "config": cfg,
+        },
+        cfg.ckpt_path
+    )
+    
     logger.info(f"Saved model -> {cfg.ckpt_path}")
 
     model2 = MLP(cfg.hidden_dim).to(device)
-    model2.load_state_dict(torch.load(cfg.ckpt_path))
+    model2.load_state_dict(torch.load(cfg.ckpt_path)["model_state_dict"])
     model2.eval()
-    logger.info(f"Loaded model <- {cfg.ckpt_path}")
+    logger.info(f"Loaded model <- {cfg.ckpt_path}")     #Checkpoint is saved and loaded successfully, ensuring reusability
