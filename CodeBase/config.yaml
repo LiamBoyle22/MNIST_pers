@@ -4,3 +4,4 @@ epochs: 5
 hidden_dim: 256
 patience: 3
 metrics_path: "metrics.csv"
+best_ckpt_path: "best_model.pt"

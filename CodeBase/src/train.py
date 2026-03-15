@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
+from CodeBase.src import model
 from src.data import make_loaders
 from src.model import MLP
 from src.utils import load_config, setup_logger
@@ -116,7 +117,6 @@ def run_training(config_path: str | Path) -> None:
     with open(cfg.metrics_path, "w", newline="") as metrics_file:
         writer = csv.writer(metrics_file)
         writer.writerow(["epoch", "train_loss", "train_acc", "val_loss", "val_acc"])
-        logger.info(f"Saved metrics -> {cfg.metrics_path}")
 
     for epoch in range (1, cfg.epochs + 1):
         tr_loss, tr_acc = train_one_epoch(
@@ -144,7 +144,21 @@ def run_training(config_path: str | Path) -> None:
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             epochs_wout_improve = 0
-            logger.info(f"New best val acc: {best_val_acc:.4f}")
+
+            torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "val_acc": val_acc,
+                    "config": cfg,
+                },
+                cfg.best_ckpt_path
+            )  
+            
+            logger.info(f"New best val acc: {best_val_acc:.4f} | "
+                        f"Saved checkpoint -> {cfg.best_ckpt_path}")
+            
         else:
             epochs_wout_improve += 1
             logger.info(
@@ -157,19 +171,20 @@ def run_training(config_path: str | Path) -> None:
             break   #Early stopping if validation accuracy does not improve for 'patience' epochs
             
     torch.save(
-        {
-            "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "val_acc": val_acc,
-            "config": cfg,
-        },
+        model.state_dict(),
         cfg.ckpt_path
     )
-    
-    logger.info(f"Saved model -> {cfg.ckpt_path}")
 
+    logger.info(f"Saved model -> {cfg.best_ckpt_path}")
+
+    best_checkpoint = torch.load(cfg.best_ckpt_path, map_location=device)
+    
     model2 = MLP(cfg.hidden_dim).to(device)
-    model2.load_state_dict(torch.load(cfg.ckpt_path)["model_state_dict"])
+    model2.load_state_dict(best_checkpoint["model_state_dict"])
     model2.eval()
-    logger.info(f"Loaded model <- {cfg.ckpt_path}")     #Checkpoint is saved and loaded successfully, ensuring reusability
+
+    logger.info(
+        f"Loaded best model <- {cfg.best_ckpt_path}"
+        f"(epoch = {best_checkpoint['epoch']}, val_acc = {best_checkpoint['val_acc']:.4f})"
+    )
+

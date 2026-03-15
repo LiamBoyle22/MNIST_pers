@@ -12,10 +12,11 @@ class TrainConfig:
     data_dir: str = "./data" 
     log_file: str = "training.log"
     ckpt_path: str = "mnist_mlp_state.pt"
+    best_ckpt_path: str = "best_model.pt" 
+    metrics_path: str = "metrics.csv"
     patience: int = 3
     log_every: int = 100 
     num_workers: int = 2
-    metrics_path: str = "metrics.csv"
 
 def load_config(config_path: str | Path) -> TrainConfig:
     with open(config_path, "r") as f:
@@ -29,6 +30,7 @@ def load_config(config_path: str | Path) -> TrainConfig:
         data_dir = str(cfg.get("data_dir", "./data")),
         log_file = str(cfg.get("log_file", "training.log")),
         ckpt_path = str(cfg.get("ckpt_path", "mnist_mlp_state.pt")),
+        best_ckpt_path = str(cfg.get("best_ckpt_path", "best_model.pt")),
         log_every = int(cfg.get("log_every", 100)),
         num_workers = int(cfg.get("num_workers", 2)),
         patience = int(cfg.get("patience", 3)),
