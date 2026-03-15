@@ -103,7 +103,11 @@ def run_training(config_path: str | Path) -> None:
         f"epochs={cfg.epochs} batch_size={cfg.batch_size} lr={cfg.learning_rate} hidden_dim={cfg.hidden_dim}"
     )
 
-    train_loader, val_loader = make_loaders(cfg)
+    train_loader, val_loader = make_loaders(
+        batch_size = cfg.batch_size,
+        data_dir = cfg.data_dir,
+        num_workers = cfg.num_workers
+    )
 
     model = MLP(cfg.hidden_dim).to(device)
     criterion = nn.CrossEntropyLoss()
@@ -118,58 +122,57 @@ def run_training(config_path: str | Path) -> None:
         writer = csv.writer(metrics_file)
         writer.writerow(["epoch", "train_loss", "train_acc", "val_loss", "val_acc"])
 
-    for epoch in range (1, cfg.epochs + 1):
-        tr_loss, tr_acc = train_one_epoch(
-            model = model, 
-            loader = train_loader, 
-            criterion = criterion, 
-            optimizer = optimizer, 
-            device = device, 
-            logger = logger, 
-            log_every = cfg.log_every
-        )
-        
-        val_loss, val_acc = Validate(model, val_loader, criterion, device)
-
-        
-        logger.info(
-            f"Epoch {epoch} | "
-            f"train_loss = {tr_loss:.4f} train_acc{tr_acc:.4f} | "
-            f"val_loss = {val_loss:.4f} val_acc = {val_acc:.4f}"
-        )
-
-        writer.writerow([epoch, tr_loss, tr_acc, val_loss, val_acc])    #Log training and validation metrics to CSV for later analysis
-        metrics_file.flush()    #Ensure metrics are written to disk after each epoch
-
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            epochs_wout_improve = 0
-
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_acc": val_acc,
-                    "config": cfg,
-                },
-                cfg.best_ckpt_path
-            )  
-            
-            logger.info(f"New best val acc: {best_val_acc:.4f} | "
-                        f"Saved checkpoint -> {cfg.best_ckpt_path}")
-            
-        else:
-            epochs_wout_improve += 1
-            logger.info(
-                f"No improvement in val acc for {epochs_wout_improve} epoch(s)"
-                f" (patience={cfg.patience})"
+        for epoch in range (1, cfg.epochs + 1):
+            tr_loss, tr_acc = train_one_epoch(
+                model = model, 
+                loader = train_loader, 
+                criterion = criterion, 
+                optimizer = optimizer, 
+                device = device, 
+                logger = logger, 
+                log_every = cfg.log_every
             )
-        
-        if epochs_wout_improve >= cfg.patience:
-            logger.info(f"Early stopping triggered at epoch {epoch}")
-            break   #Early stopping if validation accuracy does not improve for 'patience' epochs
             
+            val_loss, val_acc = Validate(model, val_loader, criterion, device)
+
+            
+            logger.info(
+                f"Epoch {epoch} | "
+                f"train_loss = {tr_loss:.4f} train_acc{tr_acc:.4f} | "
+                f"val_loss = {val_loss:.4f} val_acc = {val_acc:.4f}"
+            )
+
+            writer.writerow([epoch, tr_loss, tr_acc, val_loss, val_acc])    #Log training and validation metrics to CSV for later analysis
+            metrics_file.flush()    #Ensure metrics are written to disk after each epoch
+
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                epochs_wout_improve = 0
+
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                        "val_acc": val_acc,
+                    },
+                    cfg.best_ckpt_path
+                )  
+                
+                logger.info(f"New best val acc: {best_val_acc:.4f} | "
+                            f"Saved checkpoint -> {cfg.best_ckpt_path}")
+                
+            else:
+                epochs_wout_improve += 1
+                logger.info(
+                    f"No improvement in val acc for {epochs_wout_improve} epoch(s)"
+                    f" (patience={cfg.patience})"
+                )
+            
+            if epochs_wout_improve >= cfg.patience:
+                logger.info(f"Early stopping triggered at epoch {epoch}")
+                break   #Early stopping if validation accuracy does not improve for 'patience' epochs
+                
     torch.save(
         model.state_dict(),
         cfg.ckpt_path
@@ -187,4 +190,3 @@ def run_training(config_path: str | Path) -> None:
         f"Loaded best model <- {cfg.best_ckpt_path}"
         f"(epoch = {best_checkpoint['epoch']}, val_acc = {best_checkpoint['val_acc']:.4f})"
     )
-

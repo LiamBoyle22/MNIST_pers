@@ -55,7 +55,7 @@ def setup_logger(name: str = "trainer", log_file: str = "training.log") -> loggi
         datefmt = "%Y-%m-%d %H:%M:%S",
     )
 
-    console = logging.Streamhandler()
+    console = logging.StreamHandler()
     console.setLevel(logging.INFO)
     console.setFormatter(formatter)
 
