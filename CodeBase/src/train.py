@@ -6,7 +6,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from CodeBase.src import model
 from src.data import make_loaders
 from src.model import MLP
 from src.utils import load_config, setup_logger
